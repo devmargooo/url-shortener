@@ -1,10 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/devmargooo/url-shortener/internal/config"
+	mwLogger "github.com/devmargooo/url-shortener/internal/http-server/middleware/logger"
+	"github.com/devmargooo/url-shortener/internal/lib/logger/sl"
+	"github.com/devmargooo/url-shortener/internal/storage/sqlite"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 const (
@@ -19,6 +25,24 @@ func main() {
 	log = log.With(slog.String("env", cfg.Env))
 	log.Info("initializing server", slog.String("address", cfg.Address))
     log.Debug("logger debug mode enabled")
+
+    storage, err := sqlite.New(cfg.StoragePath)
+    if err != nil {
+        log.Error("failed to initialize storage", sl.Err(err))
+    }
+
+    fmt.Printf("%+v\n", storage)
+
+    router := chi.NewRouter()  
+  
+    router.Use(middleware.RequestID) // Добавляет request_id в каждый запрос, для трейсинга
+    router.Use(middleware.Logger) // Логирование всех запросов
+    router.Use(middleware.Recoverer)  // Если где-то внутри сервера (обработчика запроса) произойдет паника, приложение не должно упасть
+    router.Use(middleware.URLFormat) // Парсер URLов поступающих запросов
+    router.Use(mwLogger.New(log))
+
+    fmt.Printf("%+v", router)
+
 }
 
 func setupLogger(env string) *slog.Logger {
